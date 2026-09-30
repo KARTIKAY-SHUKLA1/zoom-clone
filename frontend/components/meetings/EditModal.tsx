@@ -17,6 +17,9 @@ export default function EditModal({ meeting: m, onClose, onSaved }: Props) {
           title: m.title,
           description: m.description ?? '',
           duration_minutes: m.duration_minutes,
+          start_time: m.start_time,
+          time_zone: m.time_zone,
+          is_recurring: m.is_recurring,
         }}
         onSaved={onSaved}
         onCancel={onClose}

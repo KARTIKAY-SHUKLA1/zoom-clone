@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import {
@@ -9,9 +9,11 @@ import {
   buildInvitationText,
   getJoinUrl,
   isToday,
+  copyText,
 } from '@/lib/utils'
 import type { Meeting, User } from '@/types'
 import EditModal from '@/components/meetings/EditModal'
+import DateRangePicker from '@/components/meetings/DateRangePicker'
 import Spinner from '@/components/ui/Spinner'
 import {
   ChevronDown,
@@ -60,17 +62,10 @@ function getDateGroupLabel(isoStr: string): string {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    year: new Date(isoStr).getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
   })
 }
 
-/** Format date as MM-DD-YYYY (matching real Zoom date range display) */
-function fmtRange(d: Date): string {
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${mm}-${dd}-${d.getFullYear()}`
-}
-
-/* ── Component ─────────────────────────────────────────────────────────────── */
 export default function MeetingsPage() {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('upcoming')
@@ -81,19 +76,38 @@ export default function MeetingsPage() {
   const [expanded, setExpanded] = useState<number | null>(null)
   const [editMeeting, setEditMeeting] = useState<Meeting | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
+  const requestId = useRef(0)
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('tab') === 'previous') setTab('previous')
+    const selected = Number(params.get('selected'))
+    if (selected > 0) setExpanded(selected)
+  }, [])
 
   const load = useCallback(async (t: 'upcoming' | 'previous') => {
+    const current = ++requestId.current
     setLoading(true)
     setError('')
     try {
       const [m, u] = await Promise.all([api.meetings.list(t), api.users.me()])
+      if (current !== requestId.current) return
       setMeetings(m)
       setUser(u)
+      const selected = m.find(meeting => meeting.id === Number(new URLSearchParams(window.location.search).get('selected')))
+      if (selected) {
+        const date = new Date(selected.start_time)
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+        setFromDate(key); setToDate(key)
+      }
     } catch (err: unknown) {
+      if (current !== requestId.current) return
       setError(err instanceof Error ? err.message : 'Failed to load meetings')
       setMeetings([])
     } finally {
-      setLoading(false)
+      if (current === requestId.current) setLoading(false)
     }
   }, [])
 
@@ -101,6 +115,7 @@ export default function MeetingsPage() {
     if (tab === 'upcoming' || tab === 'previous') {
       load(tab)
     } else {
+      requestId.current += 1
       setMeetings([])
       setLoading(false)
       setError('')
@@ -108,7 +123,6 @@ export default function MeetingsPage() {
   }, [tab, load])
 
   const handleStart = async (m: Meeting) => {
-    await api.meetings.setStatus(m.id, 'active').catch(() => {})
     router.push(`/room/${m.meeting_id}`)
   }
 
@@ -124,7 +138,8 @@ export default function MeetingsPage() {
   }
 
   const handleCopyInvitation = async (m: Meeting) => {
-    await navigator.clipboard.writeText(buildInvitationText(m))
+    try { await copyText(buildInvitationText(m)) }
+    catch { setError('Could not copy the invitation. Open the meeting details and copy its link.'); return }
     setCopiedId(m.id)
     setTimeout(() => setCopiedId(null), 2000)
   }
@@ -134,23 +149,21 @@ export default function MeetingsPage() {
     load(tab === 'upcoming' ? 'upcoming' : 'previous')
   }
 
-  /* Date range strings */
-  const today = new Date()
-  const upcomingEnd = new Date(today); upcomingEnd.setMonth(today.getMonth() + 3)
-  const prevStart  = new Date(today); prevStart.setMonth(today.getMonth() - 3)
-  const yesterday  = new Date(today); yesterday.setDate(today.getDate() - 1)
-  const dateRange =
-    tab === 'upcoming'
-      ? `${fmtRange(today)} to ${fmtRange(upcomingEnd)}`
-      : `${fmtRange(prevStart)} to ${fmtRange(yesterday)}`
-
-  const groups = groupByDate(meetings)
+  const groups = groupByDate(meetings.filter((m) => {
+    const date = new Date(m.start_time)
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const start = new Date(), end = new Date()
+    if (tab === 'previous') { start.setMonth(start.getMonth() - 3); end.setDate(end.getDate() - 1) }
+    else end.setMonth(end.getMonth() + 3)
+    const localKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+    return key >= (fromDate || localKey(start)) && key <= (toDate || localKey(end))
+  }))
 
   return (
-    <div className="px-4 md:px-8 py-4 md:py-6">
+    <div className="meetings-page">
 
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="meetings-heading">
         <h1 className="text-xl md:text-2xl font-semibold text-gray-900">Meetings</h1>
         <button
           onClick={() => router.push('/meetings/schedule')}
@@ -161,7 +174,7 @@ export default function MeetingsPage() {
       </div>
 
       {/* ── Promo banner ─────────────────────────────────────────────── */}
-      <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-5 text-[13px] text-gray-700 leading-relaxed">
+      <div className="meetings-promo">
         Your current Basic plan allows{' '}
         <span className="text-orange-500">you</span> to{' '}
         <span className="text-[#0B5CFF] cursor-pointer hover:underline">schedule meetings</span>{' '}
@@ -173,11 +186,11 @@ export default function MeetingsPage() {
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────── */}
-      <div className="flex border-b border-gray-200 mb-4 overflow-x-auto scrollbar-none">
+      <div className="meetings-tabs">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
-            onClick={() => { setTab(id); setExpanded(null) }}
+            onClick={() => { requestId.current += 1; setTab(id); setExpanded(null); setFromDate(''); setToDate('') }}
             className={`flex-shrink-0 px-3 md:px-4 py-2.5 text-xs md:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               tab === id
                 ? 'border-[#0B5CFF] text-[#0B5CFF]'
@@ -191,16 +204,7 @@ export default function MeetingsPage() {
 
       {/* ── Date range filter (both Upcoming and Previous) ────────────── */}
       {(tab === 'upcoming' || tab === 'previous') && !loading && (
-        <div className="flex items-center gap-2 mb-4">
-          <div className="flex items-center gap-2 border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-700 bg-white cursor-pointer hover:border-gray-400 transition-colors">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="text-gray-500">
-              <rect x="1" y="2" width="14" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M1 6h14" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M5 1v2M11 1v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
-            {dateRange}
-          </div>
-        </div>
+        <DateRangePicker from={fromDate} to={toDate} previous={tab === 'previous'} onChange={(from, to) => { setFromDate(from); setToDate(to) }} />
       )}
 
       {/* ── Soft error ───────────────────────────────────────────────── */}
@@ -250,7 +254,7 @@ export default function MeetingsPage() {
           <p className="text-gray-400 text-sm">This section is not available in the demo.</p>
         </div>
 
-      ) : !error ? (
+      ) : !error || meetings.length > 0 ? (
         /* ── Meeting list ───────────────────────────────────────────── */
         <div>
           {groups.length === 0 && (
@@ -262,35 +266,35 @@ export default function MeetingsPage() {
           {groups.map(([dateLabel, dayMeetings]) => (
             <div key={dateLabel}>
               {/* Date group header — gray band */}
-              <div className="bg-gray-50 px-3 py-1.5 border-y border-gray-100 mb-0">
+              <div className="meeting-date-band">
                 <p className="text-sm font-medium text-gray-700">{dateLabel}</p>
               </div>
 
-              {dayMeetings.map((m) => {
-                const isNow =
-                  m.status === 'active' ||
-                  (m.status !== 'ended' && new Date(m.start_time) <= new Date())
+              {dayMeetings.map((m, index) => {
                 const isExp = expanded === m.id
+                const isPast = new Date(m.start_time).getTime() + m.duration_minutes * 60_000 <= Date.now()
 
                 return (
-                  <div key={m.id} className="border-b border-gray-100 last:border-b-0">
-                    {/* ── Meeting row ── */}
+                  <div key={m.id} className="meeting-list-item">
+                    {/* ── Meeting row — group enables hover-reveal ── */}
                     <div
                       onClick={() => setExpanded(isExp ? null : m.id)}
-                      className={`flex flex-col sm:flex-row sm:items-start py-4 px-3 cursor-pointer transition-colors ${
-                        isExp ? 'bg-blue-50/30' : 'hover:bg-gray-50'
-                      }`}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExp}
+                      aria-label={`Details for ${m.title}`}
+                      onKeyDown={(e) => {
+                        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setExpanded(isExp ? null : m.id) }
+                      }}
+                      className={`meeting-row group flex flex-col sm:flex-row cursor-pointer ${isPast ? 'meeting-past' : ''}`}
                     >
                       {/* Time + upgrade promo */}
-                      <div className="sm:w-52 flex-shrink-0 mb-1 sm:mb-0">
-                        <p className="text-sm font-medium text-[#0B5CFF]">
+                      <div className="meeting-time">
+                        <p>
                           {getMeetingTimeRange(m)}
-                          {isNow && (
-                            <span className="ml-1.5 text-red-500 text-xs font-bold">| NOW</span>
-                          )}
                         </p>
-                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                          Need more meeting time?{' '}
+                        <p className={`meeting-upgrade ${index > 0 ? 'invisible' : ''}`}>
+                          Need more meeting time?<br />
                           <span className="text-[#0B5CFF] hover:underline cursor-pointer">
                             Upgrade to Zoom Workplace Pro
                           </span>
@@ -298,8 +302,8 @@ export default function MeetingsPage() {
                       </div>
 
                       {/* Meeting title + ID */}
-                      <div className="flex-1 min-w-0 sm:px-4 mb-2 sm:mb-0">
-                        <p className="text-sm font-semibold text-[#0B5CFF] hover:underline">
+                      <div className="meeting-topic">
+                        <p>
                           {m.title}
                         </p>
                         <p className="text-[12px] text-gray-500 mt-0.5">
@@ -308,22 +312,22 @@ export default function MeetingsPage() {
                         </p>
                       </div>
 
-                      {/* Inline action buttons — stop row expand propagation */}
+                      {/* Inline buttons — hidden by default, appear on row hover */}
                       <div
-                        className="flex flex-wrap items-center gap-0.5 flex-shrink-0"
+                        className="meeting-actions flex flex-wrap items-center flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity duration-150"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
+                          disabled={m.status === 'ended'}
                           onClick={() => handleStart(m)}
                           className="bg-[#0B5CFF] hover:bg-[#0a50e0] text-white text-xs font-medium px-3.5 py-1.5 rounded transition-colors"
                         >
                           Start
                         </button>
-                        <button className="text-xs text-gray-600 hover:text-gray-900 px-3 py-1.5">
-                          Chat
-                        </button>
+                        <button disabled title="Chat placeholder outside the core assignment" className="meeting-chat">Chat</button>
                         <button
                           onClick={() => setEditMeeting(m)}
+                          disabled={m.status !== 'scheduled'}
                           className="text-xs text-gray-600 hover:text-gray-900 px-3 py-1.5"
                         >
                           Edit
@@ -369,6 +373,7 @@ export default function MeetingsPage() {
                             </button>
                           )}
                           <button
+                            onClick={() => handleCopyInvitation(m)}
                             className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-1.5 rounded-full hover:bg-gray-50 transition-colors"
                           >
                             <Users size={12} /> Message Invitees
@@ -382,7 +387,7 @@ export default function MeetingsPage() {
                               : <Copy size={12} />}
                             {copiedId === m.id ? 'Copied!' : 'Copy Invitation'}
                           </button>
-                          {tab === 'upcoming' && (
+                          {m.status === 'scheduled' && (
                             <button
                               onClick={() => setEditMeeting(m)}
                               className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-1.5 rounded-full hover:bg-gray-50 transition-colors"
@@ -399,6 +404,7 @@ export default function MeetingsPage() {
                         </div>
 
                         {/* Security */}
+                        {m.description && <p className="text-sm text-gray-600 mb-3 whitespace-pre-wrap">{m.description}</p>}
                         <div className="pt-3 border-t border-gray-100">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1.5">
                             Security

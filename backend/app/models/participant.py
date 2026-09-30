@@ -1,9 +1,8 @@
-from datetime import datetime
-from sqlalchemy import (
-    Column, Integer, String, DateTime, Boolean, ForeignKey, Index
-)
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import relationship
+
 from app.database import Base
+from app.time import utc_now
 
 
 class Participant(Base):
@@ -21,7 +20,7 @@ class Participant(Base):
     role = Column(String(20), nullable=False, default="participant")
     is_muted = Column(Boolean, nullable=False, default=False)
     is_video_off = Column(Boolean, nullable=False, default=False)
-    joined_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    joined_at = Column(DateTime, nullable=False, default=utc_now)
     left_at = Column(DateTime, nullable=True)
 
     meeting = relationship("Meeting", back_populates="participants")

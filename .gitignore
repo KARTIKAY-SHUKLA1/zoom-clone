@@ -39,3 +39,10 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Verification artifacts
+verification-artifacts/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.next-e2e/

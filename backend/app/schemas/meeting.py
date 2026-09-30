@@ -1,39 +1,76 @@
-from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel
+from datetime import datetime, timezone
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Field, StringConstraints, field_validator
+
+from app.schemas.common import TimeZone, UTCModel
+
+Title = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+]
+Description = Annotated[str, StringConstraints(strip_whitespace=True, max_length=5000)]
+Duration = Annotated[int, Field(strict=True, ge=1, le=1800)]
 
 
 class MeetingCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
+    title: Title
+    description: Description | None = None
     start_time: datetime
-    duration_minutes: int = 40
-    time_zone: str = "Asia/Kolkata"
+    duration_minutes: Duration = 40
+    time_zone: TimeZone = "Asia/Kolkata"
     is_recurring: bool = False
+
+    @field_validator("start_time")
+    @classmethod
+    def future_start(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Start time must include a UTC offset.")
+        value = value.astimezone(timezone.utc)
+        if value <= datetime.now(timezone.utc):
+            raise ValueError("Choose a start time in the future.")
+        return value.replace(tzinfo=None)
 
 
 class MeetingUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    start_time: Optional[datetime] = None
-    duration_minutes: Optional[int] = None
-    time_zone: Optional[str] = None
-    is_recurring: Optional[bool] = None
+    title: Title | None = None
+    description: Description | None = None
+    start_time: datetime | None = None
+    duration_minutes: Duration | None = None
+    time_zone: TimeZone | None = None
+    is_recurring: bool | None = None
+
+    @field_validator(
+        "title", "start_time", "duration_minutes", "time_zone", "is_recurring"
+    )
+    @classmethod
+    def non_nullable(cls, value):
+        if value is None:
+            raise ValueError("This field cannot be null.")
+        return value
+
+    @field_validator("start_time")
+    @classmethod
+    def utc_start(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Start time must include a UTC offset.")
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class MeetingStatusUpdate(BaseModel):
-    status: str  # scheduled | active | ended
+    status: Literal["scheduled", "active", "ended"]
 
 
 class ValidateMeetingRequest(BaseModel):
     # accepts raw digit string (with/without spaces) OR full invite URL
-    meeting_input: str
+    meeting_input: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2048)
+    ]
 
 
-class MeetingOut(BaseModel):
+class MeetingOut(UTCModel):
     id: int
     title: str
-    description: Optional[str]
+    description: str | None
     host_id: int
     meeting_id: str
     passcode: str
@@ -46,5 +83,3 @@ class MeetingOut(BaseModel):
     is_recurring: bool
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}

@@ -1,9 +1,17 @@
-from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Index
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
+
 from app.database import Base
+from app.time import utc_now
 
 
 class Meeting(Base):
@@ -25,10 +33,8 @@ class Meeting(Base):
     duration_minutes = Column(Integer, nullable=False, default=40)
     time_zone = Column(String(100), nullable=False, default="Asia/Kolkata")
     is_recurring = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
 
     host = relationship("User", backref="hosted_meetings")
     participants = relationship(

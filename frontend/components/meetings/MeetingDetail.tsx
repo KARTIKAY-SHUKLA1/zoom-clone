@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { Meeting, User } from '@/types'
-import { formatMeetingId, getMeetingTimeRange, buildInvitationText } from '@/lib/utils'
+import { formatMeetingId, getMeetingTimeRange, buildInvitationText, copyText, getJoinUrl, isMeetingNow } from '@/lib/utils'
 import { Play, Users, Copy, Edit2, Trash2, CheckCheck } from 'lucide-react'
 
 interface Props {
@@ -24,12 +24,11 @@ export default function MeetingDetail({
   const [showInvitation, setShowInvitation] = useState(false)
 
   const displayId = formatMeetingId(m.meeting_id)
-  const isActive =
-    m.status === 'active' ||
-    (m.status !== 'ended' && new Date(m.start_time) <= new Date())
+  const isActive = isMeetingNow(m)
 
   const copyInvitation = async () => {
-    await navigator.clipboard.writeText(buildInvitationText(m))
+    try { await copyText(buildInvitationText(m)) }
+    catch { setShowInvitation(true); return }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -64,7 +63,7 @@ export default function MeetingDetail({
           </button>
         )}
 
-        <button className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-full hover:bg-gray-50 transition-colors">
+        <button onClick={() => setShowInvitation(true)} className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-full hover:bg-gray-50 transition-colors">
           <Users size={12} /> Message Invitees
         </button>
 
@@ -80,7 +79,7 @@ export default function MeetingDetail({
           {copied ? 'Copied!' : 'Copy Invitation'}
         </button>
 
-        {m.status !== 'ended' && (
+        {m.status === 'scheduled' && (
           <button
             onClick={onEdit}
             className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-full hover:bg-gray-50 transition-colors"
@@ -132,7 +131,7 @@ export default function MeetingDetail({
           </p>
           <p className="text-xs text-gray-400 mt-1 break-all">
             Invite link:{' '}
-            <span className="text-[#0B5CFF]">{m.invite_link}</span>
+            <a href={getJoinUrl(m.meeting_id)} className="text-[#0B5CFF] hover:underline">{getJoinUrl(m.meeting_id)}</a>
           </p>
         </div>
       </div>

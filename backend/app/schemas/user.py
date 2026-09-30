@@ -1,8 +1,9 @@
 from datetime import datetime
-from pydantic import BaseModel
+
+from app.schemas.common import UTCModel
 
 
-class UserOut(BaseModel):
+class UserOut(UTCModel):
     id: int
     name: str
     email: str
@@ -10,5 +11,3 @@ class UserOut(BaseModel):
     avatar_initials: str
     plan: str
     created_at: datetime
-
-    model_config = {"from_attributes": True}

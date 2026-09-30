@@ -1,19 +1,20 @@
-from datetime import datetime
 from sqlalchemy.orm import Session
+
+from app.config import settings
 from app.models.meeting import Meeting
 from app.schemas.meeting import MeetingCreate, MeetingUpdate
 from app.services.meeting_service import (
+    generate_invite_link,
     generate_meeting_id,
     generate_passcode,
-    generate_invite_link,
 )
-from app.config import settings
-
+from app.time import utc_now
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _unique_meeting_id(db: Session) -> str:
-    """Generate a collision-free 10-digit meeting ID."""
+    """Generate a collision-free 11-digit meeting ID."""
     mid = generate_meeting_id()
     while db.query(Meeting).filter(Meeting.meeting_id == mid).first():
         mid = generate_meeting_id()
@@ -21,6 +22,7 @@ def _unique_meeting_id(db: Session) -> str:
 
 
 # ── create ────────────────────────────────────────────────────────────────────
+
 
 def create_scheduled_meeting(db: Session, data: MeetingCreate, host_id: int) -> Meeting:
     mid = _unique_meeting_id(db)
@@ -55,7 +57,7 @@ def create_instant_meeting(db: Session, host_id: int) -> Meeting:
         invite_link=generate_invite_link(mid, settings.frontend_url),
         status="active",
         is_instant=True,
-        start_time=datetime.utcnow(),
+        start_time=utc_now(),
         duration_minutes=40,
         time_zone="Asia/Kolkata",
         is_recurring=False,
@@ -67,6 +69,7 @@ def create_instant_meeting(db: Session, host_id: int) -> Meeting:
 
 
 # ── read ──────────────────────────────────────────────────────────────────────
+
 
 def get_meeting_by_pk(db: Session, meeting_pk: int) -> Meeting | None:
     return db.query(Meeting).filter(Meeting.id == meeting_pk).first()
@@ -99,10 +102,11 @@ def list_previous(db: Session, host_id: int) -> list[Meeting]:
 
 # ── update ────────────────────────────────────────────────────────────────────
 
+
 def update_meeting(db: Session, meeting: Meeting, data: MeetingUpdate) -> Meeting:
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(meeting, field, value)
-    meeting.updated_at = datetime.utcnow()
+    meeting.updated_at = utc_now()
     db.commit()
     db.refresh(meeting)
     return meeting
@@ -113,13 +117,18 @@ def update_status(db: Session, meeting: Meeting, status: str) -> Meeting:
     if status not in allowed:
         raise ValueError(f"status must be one of {allowed}")
     meeting.status = status
-    meeting.updated_at = datetime.utcnow()
+    meeting.updated_at = utc_now()
+    if status == "ended":
+        for participant in meeting.participants:
+            if participant.left_at is None:
+                participant.left_at = meeting.updated_at
     db.commit()
     db.refresh(meeting)
     return meeting
 
 
 # ── delete ────────────────────────────────────────────────────────────────────
+
 
 def delete_meeting(db: Session, meeting: Meeting) -> None:
     db.delete(meeting)

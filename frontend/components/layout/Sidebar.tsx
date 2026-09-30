@@ -37,14 +37,14 @@ export default function Sidebar({ isOpen, onClose }: Props) {
   return (
     <aside
       className={[
-        'flex flex-col bg-white border-r border-gray-200 overflow-y-auto',
+        'portal-sidebar flex flex-col',
         // Mobile: fixed full-height drawer
         'fixed inset-y-0 left-0 z-40 w-[220px]',
         'transition-transform duration-200 ease-in-out',
         isOpen ? 'translate-x-0' : '-translate-x-full',
         // Desktop: inline, always visible
         'md:relative md:inset-auto md:z-auto md:translate-x-0',
-        'md:w-[200px] md:flex-shrink-0',
+        'md:flex-shrink-0',
       ].join(' ')}
     >
       {/* Mobile close button */}
@@ -83,12 +83,14 @@ export default function Sidebar({ isOpen, onClose }: Props) {
             const active = href !== '#' && pathname.startsWith(href)
             return (
               <Link
+                aria-disabled={href === '#' || undefined}
+                tabIndex={href === '#' ? -1 : undefined}
                 key={label}
                 href={href}
-                onClick={onClose}
+                onClick={(event) => { if (href === '#') event.preventDefault(); else onClose() }}
                 className={`flex items-center justify-between px-3 py-1.5 rounded-md text-[13px] transition-colors ${
                   active
-                    ? 'text-[#0B5CFF] font-medium'
+                    ? 'sidebar-selected text-[#0B5CFF] font-medium'
                     : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
@@ -111,11 +113,11 @@ export default function Sidebar({ isOpen, onClose }: Props) {
       </div>
 
       {/* Discover More */}
-      <div className="px-6 py-3 border-t border-gray-100 mt-2">
+      <div className="sidebar-discover">
         <button className="text-[13px] text-[#0B5CFF] hover:underline">
           Discover More Products
         </button>
       </div>
-    </aside>
+    <div className="sidebar-account">{['My Account', 'Admin', 'Support'].map(label => <details key={label}><summary>{label}</summary><p>Available as a placeholder in this assignment.</p></details>)}<a href="https://zoom.us/pricing" target="_blank" rel="noreferrer">Upgrade to Pro</a></div></aside>
   )
 }

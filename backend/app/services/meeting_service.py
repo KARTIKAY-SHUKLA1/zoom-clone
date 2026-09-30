@@ -1,6 +1,7 @@
-import random
 import re
+import secrets
 import string
+from urllib.parse import parse_qs, urlparse
 
 
 def generate_meeting_id() -> str:
@@ -8,18 +9,18 @@ def generate_meeting_id() -> str:
 
     Display format (frontend only): XXX XXXX XXXX  (3-4-4 grouping)
     """
-    return "".join(str(random.randint(0, 9)) for _ in range(11))
+    return "".join(secrets.choice(string.digits) for _ in range(11))
 
 
 def generate_passcode(length: int = 6) -> str:
     """Generate a random alphanumeric passcode."""
     chars = string.ascii_letters + string.digits
-    return "".join(random.choices(chars, k=length))
+    return "".join(secrets.choice(chars) for _ in range(length))
 
 
 def generate_invite_link(meeting_id: str, frontend_url: str) -> str:
     """Return a shareable join URL."""
-    return f"{frontend_url}/join?mid={meeting_id}"
+    return f"{frontend_url.rstrip('/')}/join?mid={meeting_id}"
 
 
 def format_meeting_id(meeting_id: str) -> str:
@@ -40,9 +41,16 @@ def extract_meeting_id(raw: str) -> str:
       - Formatted with spaces/hyphens: "874 9226 3391" -> "87492263391"
       - Full invite link: "http://localhost:3000/join?mid=87492263391" -> "87492263391"
     """
-    # Prefer the explicit ?mid= / &mid= query parameter
-    mid_match = re.search(r"[?&]mid=(\d+)", raw)
-    if mid_match:
-        return mid_match.group(1)
-    # Fall back: strip every non-digit character
-    return re.sub(r"\D", "", raw)
+    raw = raw.strip()
+    if raw.startswith(("http://", "https://")):
+        try:
+            values = parse_qs(urlparse(raw).query).get("mid", [])
+        except ValueError:
+            return ""
+        if len(values) != 1:
+            return ""
+        raw = values[0]
+    if not re.fullmatch(r"[0-9\s-]+", raw):
+        return ""
+    mid = re.sub(r"[\s-]", "", raw)
+    return mid if re.fullmatch(r"[0-9]{11}", mid) else ""

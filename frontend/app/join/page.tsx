@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import Spinner from '@/components/ui/Spinner'
-import Link from 'next/link'
+import Topbar from '@/components/layout/Topbar'
 
-type Step = 'id' | 'name'
+type Step = 'id' | 'launch' | 'name'
 
 export default function JoinPage() {
   const router = useRouter()
@@ -16,6 +16,12 @@ export default function JoinPage() {
   const [pending, setPending] = useState<{ id: number; meeting_id: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [alwaysBrowser, setAlwaysBrowser] = useState(false)
+
+  useEffect(() => {
+    setInput(new URLSearchParams(window.location.search).get('mid') ?? '')
+    setAlwaysBrowser(localStorage.getItem('zoom-join-from-browser') === 'true')
+  }, [])
 
   const handleValidate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,9 +35,9 @@ export default function JoinPage() {
         return
       }
       setPending({ id: m.id, meeting_id: m.meeting_id })
-      setStep('name')
-    } catch {
-      setError('Invalid meeting ID or meeting not found.')
+      setStep(alwaysBrowser ? 'name' : 'launch')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid meeting ID or meeting not found.')
     } finally {
       setLoading(false)
     }
@@ -43,10 +49,10 @@ export default function JoinPage() {
     setLoading(true)
     setError('')
     try {
-      await api.participants.join(pending.id, displayName.trim())
-      router.push(`/room/${pending.meeting_id}`)
-    } catch {
-      setError('Failed to join. Please try again.')
+      sessionStorage.setItem(`meeting-name:${pending.meeting_id}`, displayName.trim())
+      router.push(`/room/${pending.meeting_id}?guest=1`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to join. Please try again.')
       setLoading(false)
     }
   }
@@ -55,42 +61,37 @@ export default function JoinPage() {
     'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B5CFF] focus:border-transparent'
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className={`join-page ${step === 'launch' ? 'join-launch-page' : ''}`}>
       {/* Minimal header — no sidebar */}
-      <header className="px-8 py-4 border-b border-gray-100 flex items-center justify-between">
-        <Link href="/" className="text-[#0B5CFF] font-bold text-xl select-none">
-          zoom
-        </Link>
-        <span className="text-xs text-gray-400">
-          Support &nbsp;·&nbsp;
-          <span className="text-[#0B5CFF] cursor-pointer hover:underline">English</span>
-        </span>
-      </header>
+      <Topbar compact onMenuClick={() => {}} />
 
-      <div className="flex flex-col items-center justify-center flex-1 px-4">
-        <div className="w-full max-w-[380px]">
+      <div className="join-content">
+        <div className="join-form">
           <h1 className="text-2xl font-semibold text-gray-900 text-center mb-8">
-            Join Meeting
+            {step === 'launch' ? 'Join meeting' : 'Join Meeting'}
           </h1>
 
           {step === 'id' ? (
             <form onSubmit={handleValidate} className="space-y-4">
               <div>
                 <label className="block text-sm text-gray-600 mb-1.5">
-                  Meeting ID or Personal Link Name
+                  Meeting ID or invite link
                 </label>
                 <input
                   type="text"
+                  aria-label="Meeting ID or invite link"
+                  required
+                  maxLength={2048}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Enter Meeting ID or Personal Link Name"
+                  placeholder="Enter Meeting ID or invite link"
                   className={inputCls}
                   autoFocus
                 />
               </div>
 
               <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-                <input type="checkbox" className="rounded border-gray-300" />
+                <input type="checkbox" checked={alwaysBrowser} onChange={event => { setAlwaysBrowser(event.target.checked); localStorage.setItem('zoom-join-from-browser', String(event.target.checked)) }} className="rounded border-gray-300" />
                 Always join from browser
               </label>
 
@@ -109,10 +110,19 @@ export default function JoinPage() {
                 Join
               </button>
 
-              <p className="text-center text-xs text-[#0B5CFF] hover:underline cursor-pointer mt-2">
+              <p className="join-room-system">
                 Join a meeting from an H.323/SIP room system
               </p>
             </form>
+          ) : step === 'launch' ? (
+            <div className="join-launch-options">
+              <p>How would you like to join this meeting?</p>
+              <button disabled className="join-app-button" title="Native Zoom app launch is outside this browser assignment">Join from Zoom Workplace app</button>
+              <button onClick={() => setStep('name')} className="join-browser-button">Join from your browser</button>
+              <p>This meeting runs in your browser. No download is required.</p>
+              <p>By joining, you agree to our <a href="https://explore.zoom.us/en/terms/" target="_blank" rel="noreferrer">Terms of Service</a> and <a href="https://explore.zoom.us/en/privacy/" target="_blank" rel="noreferrer">Privacy Statement</a>.</p>
+              <button className="join-launch-back" onClick={() => setStep('id')}>Back</button>
+            </div>
           ) : (
             <form onSubmit={handleJoin} className="space-y-4">
               <div>
@@ -121,6 +131,9 @@ export default function JoinPage() {
                 </label>
                 <input
                   type="text"
+                  aria-label="Your Name"
+                  required
+                  maxLength={100}
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Enter your display name"
@@ -157,7 +170,7 @@ export default function JoinPage() {
         </div>
       </div>
 
-      <footer className="py-4 text-center text-xs text-gray-400">
+      <footer className="join-footer">
         &copy; {new Date().getFullYear()} Zoom Communications, Inc.{' '}
         <span className="text-[#0B5CFF] cursor-pointer hover:underline">
           Privacy &amp; Legal Policies

@@ -5,14 +5,17 @@ Called automatically on startup if the users table is empty.
 All data is synthetic / fictional. No real names, emails, or phone numbers are used.
 Meeting IDs are 11 digits stored plain (display format: XXX XXXX XXXX, 3-4-4 grouping).
 """
-from datetime import datetime, timedelta
 
+from datetime import timedelta
+
+from app.config import settings
 from app.database import SessionLocal
 from app.models.meeting import Meeting
 from app.models.participant import Participant
 from app.models.user import User
+from app.time import utc_now
 
-_FRONTEND_URL = "http://localhost:3000"
+_FRONTEND_URL = settings.frontend_url.rstrip("/")
 
 # ── Seed meetings ─────────────────────────────────────────────────────────────
 # Columns: (title, description, meeting_id [11 digits], passcode, day_offset, duration_min)
@@ -131,10 +134,11 @@ def seed_if_empty() -> None:
 
 
 def _seed(db) -> None:
-    now = datetime.utcnow()
+    now = utc_now()
 
     # ── Default user (all fictional data) ─────────────────────────────────────
     user = User(
+        id=settings.default_user_id,
         name="Alex Morgan",
         email="alex.morgan@example.com",
         # 11-digit personal meeting ID stored plain, displayed as 512 8374 0960

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
+import PortalFooter from '@/components/layout/PortalFooter'
 import BackendBanner from '@/components/ui/BackendBanner'
 
 export default function MainShell({
@@ -13,10 +14,10 @@ export default function MainShell({
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="portal-shell">
       <Topbar onMenuClick={() => setSidebarOpen((v) => !v)} />
 
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="portal-body">
         {/* Mobile backdrop — tap to close */}
         {sidebarOpen && (
           <div
@@ -27,11 +28,12 @@ export default function MainShell({
 
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        <main className="flex-1 overflow-auto flex flex-col">
+        <main className="portal-main">
           <BackendBanner />
           <div className="flex-1">{children}</div>
         </main>
       </div>
+      <PortalFooter />
     </div>
   )
 }

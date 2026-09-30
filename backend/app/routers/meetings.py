@@ -14,6 +14,7 @@ from app.schemas.meeting import (
     ValidateMeetingRequest,
 )
 from app.services.meeting_service import extract_meeting_id
+from app.time import utc_now
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 
@@ -83,6 +84,18 @@ def edit_meeting(meeting_pk: int, data: MeetingUpdate, db: Session = Depends(get
     m = crud.get_meeting_by_pk(db, meeting_pk)
     if not m:
         raise HTTPException(status_code=404, detail="Meeting not found.")
+    if m.status != "scheduled":
+        raise HTTPException(
+            status_code=409, detail="Only scheduled meetings can be edited."
+        )
+    if (
+        data.start_time is not None
+        and data.start_time != m.start_time
+        and data.start_time <= utc_now()
+    ):
+        raise HTTPException(
+            status_code=422, detail="Choose a start time in the future."
+        )
     return crud.update_meeting(db, m, data)
 
 
@@ -101,12 +114,16 @@ def change_status(
     meeting_pk: int, payload: MeetingStatusUpdate, db: Session = Depends(get_db)
 ):
     """Update a meeting's status (scheduled → active → ended)."""
-    allowed = {"scheduled", "active", "ended"}
-    if payload.status not in allowed:
-        raise HTTPException(
-            status_code=422, detail=f"status must be one of {allowed}"
-        )
     m = crud.get_meeting_by_pk(db, meeting_pk)
     if not m:
         raise HTTPException(status_code=404, detail="Meeting not found.")
+    transitions = {
+        "scheduled": {"scheduled", "active", "ended"},
+        "active": {"active", "ended"},
+        "ended": {"ended"},
+    }
+    if payload.status not in transitions[m.status]:
+        raise HTTPException(
+            status_code=409, detail="This meeting cannot be restarted or rescheduled."
+        )
     return crud.update_status(db, m, payload.status)

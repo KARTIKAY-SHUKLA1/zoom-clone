@@ -1,5 +1,26 @@
 import type { Meeting } from '@/types'
 
+/** Clipboard API needs HTTPS; use a selectable textarea on older browsers. */
+export async function copyText(value: string): Promise<void> {
+  try {
+    if (navigator.clipboard) { await navigator.clipboard.writeText(value); return }
+  } catch { /* Try the legacy clipboard operation below. */ }
+  const input = document.createElement('textarea')
+  input.value = value
+  input.style.position = 'fixed'
+  input.style.opacity = '0'
+  document.body.appendChild(input)
+  input.select()
+  try {
+    if (!document.execCommand('copy')) throw new Error('Clipboard unavailable')
+  } finally { input.remove() }
+}
+
+export function isMeetingNow(m: Meeting): boolean {
+  const start = new Date(m.start_time).getTime()
+  return m.status === 'active' || (m.status === 'scheduled' && start <= Date.now() && Date.now() < start + m.duration_minutes * 60_000)
+}
+
 /**
  * Format 11-digit plain ID as "XXX XXXX XXXX" (3-4-4 grouping).
  * Only used for display — the backend always stores/receives plain digits.

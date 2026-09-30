@@ -1,7 +1,8 @@
-from datetime import datetime
 from sqlalchemy.orm import Session
+
 from app.models.participant import Participant
 from app.schemas.participant import ParticipantCreate
+from app.time import utc_now
 
 
 def list_participants(db: Session, meeting_pk: int) -> list[Participant]:
@@ -40,7 +41,7 @@ def get_participant(db: Session, participant_id: int) -> Participant | None:
 
 def remove_participant(db: Session, participant: Participant) -> None:
     """Soft-delete: set left_at timestamp."""
-    participant.left_at = datetime.utcnow()
+    participant.left_at = utc_now()
     db.commit()
 
 
