@@ -147,7 +147,7 @@ export default function MeetingsPage() {
   const groups = groupByDate(meetings)
 
   return (
-    <div className="px-4 md:px-8 py-4 md:py-6 max-w-5xl">
+    <div className="px-4 md:px-8 py-4 md:py-6">
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4">
