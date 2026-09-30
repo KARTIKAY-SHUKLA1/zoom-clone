@@ -2,7 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, X } from 'lucide-react'
+
+interface Props {
+  isOpen: boolean
+  onClose: () => void
+}
 
 const PRODUCTS: {
   label: string
@@ -26,15 +31,39 @@ const PRODUCTS: {
   { label: 'Scheduler',   href: '#',         external: true },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }: Props) {
   const pathname = usePathname()
 
   return (
-    <aside className="w-[200px] flex-shrink-0 flex flex-col bg-white border-r border-gray-200 overflow-y-auto">
-      {/* Home */}
+    <aside
+      className={[
+        // Base layout
+        'flex flex-col bg-white border-r border-gray-200 overflow-y-auto',
+        // Mobile: fixed full-height drawer, slide in/out
+        'fixed inset-y-0 left-0 z-40 w-[220px]',
+        'transition-transform duration-200 ease-in-out',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
+        // Desktop: inline, always visible, no transform
+        'md:relative md:inset-auto md:z-auto md:translate-x-0',
+        'md:w-[200px] md:flex-shrink-0',
+      ].join(' ')}
+    >
+      {/* Mobile close button */}
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <span className="text-[#0B5CFF] font-bold text-xl">zoom</span>
+        <button
+          onClick={onClose}
+          className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* Home link */}
       <div className="px-3 pt-3 pb-1">
         <Link
           href="/"
+          onClick={onClose}
           className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
             pathname === '/'
               ? 'bg-blue-50 text-[#0B5CFF]'
@@ -57,6 +86,7 @@ export default function Sidebar() {
               <Link
                 key={label}
                 href={href}
+                onClick={onClose}
                 className={`flex items-center justify-between px-3 py-1.5 rounded-md text-[13px] transition-colors group ${
                   active
                     ? 'text-[#0B5CFF] bg-blue-50 font-medium'
@@ -83,7 +113,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Discover More Products */}
+      {/* Discover More */}
       <div className="px-6 py-3 border-t border-gray-100 mt-2">
         <button className="text-[13px] text-[#0B5CFF] hover:underline">
           Discover More Products
