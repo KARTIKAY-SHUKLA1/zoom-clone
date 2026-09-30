@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Calendar, Plus, Video, Copy, CheckCheck, AlertCircle } from 'lucide-react'
+import { Calendar, Plus, Video, Copy, CheckCheck } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatMeetingId, getJoinUrl } from '@/lib/utils'
 import type { Meeting, User } from '@/types'
@@ -55,18 +55,11 @@ export default function HomePage() {
       {/* ── Main content ──────────────────────────────────────────────── */}
       <div className="flex-1 p-4 md:p-5 space-y-4 overflow-auto">
 
-        {/* Error state */}
-        {error && (
-          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-            <AlertCircle size={16} className="flex-shrink-0" />
-            <span>{error}</span>
-            <button
-              onClick={() => { setError(''); setLoading(true); window.location.reload() }}
-              className="ml-auto text-red-600 underline text-xs"
-            >
-              Retry
-            </button>
-          </div>
+        {/* Soft error — BackendBanner above already signals connectivity issues */}
+        {error && !loading && (
+          <p className="text-xs text-gray-400 text-center py-2">
+            {error} — check the banner above.
+          </p>
         )}
 
         {/* User card */}

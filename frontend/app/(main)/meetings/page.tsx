@@ -21,8 +21,6 @@ import {
   Trash2,
   Users,
   CheckCheck,
-  AlertCircle,
-  RefreshCw,
 } from 'lucide-react'
 
 type Tab =
@@ -168,16 +166,15 @@ export default function MeetingsPage() {
         ))}
       </div>
 
-      {/* ── Error state ──────────────────────────────────────────────── */}
-      {error && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm text-red-700">
-          <AlertCircle size={16} className="flex-shrink-0" />
-          <span className="flex-1">{error}</span>
+      {/* Soft error — BackendBanner above already signals connectivity issues */}
+      {error && !loading && (
+        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-4 text-sm text-gray-500">
+          <span>{error}</span>
           <button
             onClick={() => load(tab === 'upcoming' ? 'upcoming' : 'previous')}
-            className="flex items-center gap-1 text-xs font-medium text-red-600 border border-red-300 px-3 py-1 rounded-full hover:bg-red-50 transition-colors"
+            className="text-xs font-medium text-[#0B5CFF] hover:underline ml-4 flex-shrink-0"
           >
-            <RefreshCw size={11} /> Retry
+            Retry
           </button>
         </div>
       )}
