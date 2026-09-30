@@ -6,9 +6,9 @@ import { api } from '@/lib/api'
 import {
   formatMeetingId,
   getMeetingTimeRange,
-  formatShortDate,
   buildInvitationText,
   getJoinUrl,
+  isToday,
 } from '@/lib/utils'
 import type { Meeting, User } from '@/types'
 import EditModal from '@/components/meetings/EditModal'
@@ -21,8 +21,10 @@ import {
   Trash2,
   Users,
   CheckCheck,
+  Flag,
 } from 'lucide-react'
 
+/* ── Types ─────────────────────────────────────────────────────────────────── */
 type Tab =
   | 'upcoming'
   | 'previous'
@@ -32,24 +34,43 @@ type Tab =
   | 'agendas'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'upcoming', label: 'Upcoming' },
-  { id: 'previous', label: 'Previous' },
-  { id: 'attachments', label: 'Attachments' },
+  { id: 'upcoming',      label: 'Upcoming' },
+  { id: 'previous',      label: 'Previous' },
+  { id: 'attachments',   label: 'Attachments' },
   { id: 'personal-room', label: 'Personal Room' },
-  { id: 'templates', label: 'Meeting Templates' },
-  { id: 'agendas', label: 'Meeting Agendas' },
+  { id: 'templates',     label: 'Meeting Templates' },
+  { id: 'agendas',       label: 'Meeting Agendas' },
 ]
 
+/* ── Helpers ───────────────────────────────────────────────────────────────── */
 function groupByDate(meetings: Meeting[]): [string, Meeting[]][] {
   const map: Record<string, Meeting[]> = {}
   for (const m of meetings) {
-    const key = formatShortDate(m.start_time)
+    const key = getDateGroupLabel(m.start_time)
     if (!map[key]) map[key] = []
     map[key].push(m)
   }
   return Object.entries(map)
 }
 
+/** Shows "Today" for today's date, otherwise "Day, Mon D" */
+function getDateGroupLabel(isoStr: string): string {
+  if (isToday(isoStr)) return 'Today'
+  return new Date(isoStr).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+/** Format date as MM-DD-YYYY (matching real Zoom date range display) */
+function fmtRange(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}-${dd}-${d.getFullYear()}`
+}
+
+/* ── Component ─────────────────────────────────────────────────────────────── */
 export default function MeetingsPage() {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('upcoming')
@@ -65,10 +86,7 @@ export default function MeetingsPage() {
     setLoading(true)
     setError('')
     try {
-      const [m, u] = await Promise.all([
-        api.meetings.list(t),
-        api.users.me(),
-      ])
+      const [m, u] = await Promise.all([api.meetings.list(t), api.users.me()])
       setMeetings(m)
       setUser(u)
     } catch (err: unknown) {
@@ -116,41 +134,46 @@ export default function MeetingsPage() {
     load(tab === 'upcoming' ? 'upcoming' : 'previous')
   }
 
+  /* Date range strings */
   const today = new Date()
-  const rangeStart = new Date(today)
-  rangeStart.setMonth(rangeStart.getMonth() - 3)
-  const fmt = (d: Date) =>
-    d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+  const upcomingEnd = new Date(today); upcomingEnd.setMonth(today.getMonth() + 3)
+  const prevStart  = new Date(today); prevStart.setMonth(today.getMonth() - 3)
+  const yesterday  = new Date(today); yesterday.setDate(today.getDate() - 1)
+  const dateRange =
+    tab === 'upcoming'
+      ? `${fmtRange(today)} to ${fmtRange(upcomingEnd)}`
+      : `${fmtRange(prevStart)} to ${fmtRange(yesterday)}`
 
   const groups = groupByDate(meetings)
 
   return (
-    <div className="px-4 md:px-8 py-4 md:py-6 max-w-4xl">
+    <div className="px-4 md:px-8 py-4 md:py-6 max-w-5xl">
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl md:text-2xl font-semibold text-gray-900">Meetings</h1>
         <button
           onClick={() => router.push('/meetings/schedule')}
-          className="flex items-center gap-1 bg-[#0B5CFF] hover:bg-[#0a50e0] text-white text-xs md:text-sm font-medium px-3 md:px-4 py-2 rounded-lg transition-colors shadow-sm"
+          className="flex items-center gap-1 bg-[#0B5CFF] hover:bg-[#0a50e0] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
         >
-          + Schedule <span className="hidden sm:inline">a Meeting</span>
-          <ChevronDown size={13} />
+          + Schedule a Meeting <ChevronDown size={13} />
         </button>
       </div>
 
       {/* ── Promo banner ─────────────────────────────────────────────── */}
       <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-5 text-[13px] text-gray-700 leading-relaxed">
-        Your current Basic plan allows you to{' '}
+        Your current Basic plan allows{' '}
+        <span className="text-orange-500">you</span> to{' '}
         <span className="text-[#0B5CFF] cursor-pointer hover:underline">schedule meetings</span>{' '}
         for up to 40 minutes each.{' '}
         <span className="text-[#0B5CFF] cursor-pointer hover:underline">Upgrade</span>{' '}
-        to Zoom Workplace Pro for up to 30 hours.{' '}
+        to Zoom Workplace Pro to schedule meetings for up to 30 hours with advanced meeting
+        features.{' '}
         <span className="text-[#0B5CFF] cursor-pointer hover:underline">Discover Zoom Workplace Pro</span>
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────── */}
-      <div className="flex border-b border-gray-200 mb-6 overflow-x-auto scrollbar-none">
+      <div className="flex border-b border-gray-200 mb-4 overflow-x-auto scrollbar-none">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -166,7 +189,21 @@ export default function MeetingsPage() {
         ))}
       </div>
 
-      {/* Soft error — BackendBanner above already signals connectivity issues */}
+      {/* ── Date range filter (both Upcoming and Previous) ────────────── */}
+      {(tab === 'upcoming' || tab === 'previous') && !loading && (
+        <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-700 bg-white cursor-pointer hover:border-gray-400 transition-colors">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="text-gray-500">
+              <rect x="1" y="2" width="14" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M1 6h14" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M5 1v2M11 1v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            {dateRange}
+          </div>
+        </div>
+      )}
+
+      {/* ── Soft error ───────────────────────────────────────────────── */}
       {error && !loading && (
         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-4 text-sm text-gray-500">
           <span>{error}</span>
@@ -205,9 +242,6 @@ export default function MeetingsPage() {
               Upgrade Now
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            Save time by scheduling meetings directly from your calendar.
-          </p>
         </div>
 
       ) : tab !== 'upcoming' && tab !== 'previous' ? (
@@ -217,17 +251,8 @@ export default function MeetingsPage() {
         </div>
 
       ) : !error ? (
-        /* Meeting list */
+        /* ── Meeting list ───────────────────────────────────────────── */
         <div>
-          {/* Date range filter (Previous only) */}
-          {tab === 'previous' && (
-            <div className="flex items-center gap-2 mb-5">
-              <div className="flex items-center gap-1 border border-gray-300 rounded-md px-3 py-1.5 text-xs text-gray-700 bg-white select-none">
-                📅 {fmt(rangeStart)} &nbsp;to&nbsp; {fmt(today)}
-              </div>
-            </div>
-          )}
-
           {groups.length === 0 && (
             <div className="flex flex-col items-center py-12 gap-2 text-center">
               <p className="text-gray-400 text-sm">No meetings found for this period.</p>
@@ -235,84 +260,121 @@ export default function MeetingsPage() {
           )}
 
           {groups.map(([dateLabel, dayMeetings]) => (
-            <div key={dateLabel} className="mb-2">
-              <p className="text-sm font-semibold text-gray-700 py-1.5 border-b border-gray-200 mb-1 px-1">
-                {dateLabel}
-              </p>
+            <div key={dateLabel}>
+              {/* Date group header — gray band */}
+              <div className="bg-gray-50 px-3 py-1.5 border-y border-gray-100 mb-0">
+                <p className="text-sm font-medium text-gray-700">{dateLabel}</p>
+              </div>
 
               {dayMeetings.map((m) => {
-                const isExp = expanded === m.id
                 const isNow =
                   m.status === 'active' ||
                   (m.status !== 'ended' && new Date(m.start_time) <= new Date())
+                const isExp = expanded === m.id
 
                 return (
-                  <div key={m.id}>
-                    {/* Meeting row — responsive: stacked on mobile, side-by-side on sm+ */}
+                  <div key={m.id} className="border-b border-gray-100 last:border-b-0">
+                    {/* ── Meeting row ── */}
                     <div
                       onClick={() => setExpanded(isExp ? null : m.id)}
-                      className={`flex flex-col sm:flex-row sm:items-start sm:gap-8 gap-0.5 py-3 px-3 border-b border-gray-50 cursor-pointer rounded-lg transition-colors ${
-                        isExp ? 'bg-blue-50/40' : 'hover:bg-gray-50'
+                      className={`flex flex-col sm:flex-row sm:items-start py-4 px-3 cursor-pointer transition-colors ${
+                        isExp ? 'bg-blue-50/30' : 'hover:bg-gray-50'
                       }`}
                     >
-                      {/* Time */}
-                      <div className="sm:w-48 flex-shrink-0">
-                        <p className={`text-sm font-medium ${isNow ? 'text-[#0B5CFF]' : 'text-gray-800'}`}>
+                      {/* Time + upgrade promo */}
+                      <div className="sm:w-52 flex-shrink-0 mb-1 sm:mb-0">
+                        <p className="text-sm font-medium text-[#0B5CFF]">
                           {getMeetingTimeRange(m)}
                           {isNow && (
-                            <span className="ml-1.5 text-orange-500 text-xs font-bold">| NOW</span>
+                            <span className="ml-1.5 text-red-500 text-xs font-bold">| NOW</span>
                           )}
                         </p>
-                        {tab === 'previous' && (
-                          <p className="text-[11px] text-gray-500 mt-0.5 leading-snug hidden sm:block">
-                            Need more meeting time?{' '}
-                            <span className="text-[#0B5CFF] hover:underline cursor-pointer">
-                              Upgrade to Zoom Workplace Pro
-                            </span>
-                          </p>
-                        )}
+                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                          Need more meeting time?{' '}
+                          <span className="text-[#0B5CFF] hover:underline cursor-pointer">
+                            Upgrade to Zoom Workplace Pro
+                          </span>
+                        </p>
                       </div>
 
-                      {/* Title + ID */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900">{m.title}</p>
+                      {/* Meeting title + ID */}
+                      <div className="flex-1 min-w-0 sm:px-4 mb-2 sm:mb-0">
+                        <p className="text-sm font-semibold text-[#0B5CFF] hover:underline">
+                          {m.title}
+                        </p>
                         <p className="text-[12px] text-gray-500 mt-0.5">
                           Meeting ID:{' '}
                           <span className="font-mono">{formatMeetingId(m.meeting_id)}</span>
                         </p>
                       </div>
+
+                      {/* Inline action buttons — stop row expand propagation */}
+                      <div
+                        className="flex flex-wrap items-center gap-0.5 flex-shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => handleStart(m)}
+                          className="bg-[#0B5CFF] hover:bg-[#0a50e0] text-white text-xs font-medium px-3.5 py-1.5 rounded transition-colors"
+                        >
+                          Start
+                        </button>
+                        <button className="text-xs text-gray-600 hover:text-gray-900 px-3 py-1.5">
+                          Chat
+                        </button>
+                        <button
+                          onClick={() => setEditMeeting(m)}
+                          className="text-xs text-gray-600 hover:text-gray-900 px-3 py-1.5"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(m.id)}
+                          className="text-xs text-gray-600 hover:text-red-600 px-3 py-1.5"
+                        >
+                          Delete
+                        </button>
+                        {tab === 'previous' && (
+                          <button className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 flex items-center gap-1">
+                            <Flag size={10} /> Report to Zoom
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Expanded detail */}
+                    {/* ── Expanded detail panel ── */}
                     {isExp && (
-                      <div className="bg-white border border-gray-200 rounded-xl mx-0 sm:mx-2 mb-3 mt-1 px-4 md:px-6 py-4 shadow-sm">
-                        <h3 className="text-[15px] font-semibold text-gray-900 mb-0.5">{m.title}</h3>
-                        <p className="text-[13px] text-gray-500 mb-4 flex flex-wrap gap-x-2">
+                      <div className="bg-white border border-gray-200 rounded-xl mx-2 mb-3 mt-1 px-4 md:px-6 py-4 shadow-sm">
+                        <h3 className="text-[15px] font-semibold text-gray-900 mb-0.5">
+                          {m.title}
+                        </h3>
+                        <p className="text-[13px] text-gray-500 mb-4 flex flex-wrap gap-x-1.5">
                           <span>{getMeetingTimeRange(m)}</span>
                           <span>·</span>
                           <span>Host: {user?.name ?? '—'}</span>
                           <span>·</span>
-                          <span>ID: <span className="font-mono">{formatMeetingId(m.meeting_id)}</span></span>
+                          <span>
+                            ID: <span className="font-mono">{formatMeetingId(m.meeting_id)}</span>
+                          </span>
                         </p>
 
-                        {/* Action buttons — wrap on mobile */}
+                        {/* Detail action buttons */}
                         <div className="flex flex-wrap gap-2 mb-4">
-                          {m.status !== 'ended' && (
+                          {tab === 'upcoming' && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleStart(m) }}
+                              onClick={() => handleStart(m)}
                               className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white text-sm font-medium px-4 py-1.5 rounded-full transition-colors"
                             >
                               <Play size={11} fill="white" strokeWidth={0} /> Start
                             </button>
                           )}
                           <button
-                            onClick={(e) => e.stopPropagation()}
                             className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-1.5 rounded-full hover:bg-gray-50 transition-colors"
                           >
                             <Users size={12} /> Message Invitees
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleCopyInvitation(m) }}
+                            onClick={() => handleCopyInvitation(m)}
                             className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-1.5 rounded-full hover:bg-gray-50 transition-colors"
                           >
                             {copiedId === m.id
@@ -320,16 +382,16 @@ export default function MeetingsPage() {
                               : <Copy size={12} />}
                             {copiedId === m.id ? 'Copied!' : 'Copy Invitation'}
                           </button>
-                          {m.status !== 'ended' && (
+                          {tab === 'upcoming' && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); setEditMeeting(m) }}
+                              onClick={() => setEditMeeting(m)}
                               className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-1.5 rounded-full hover:bg-gray-50 transition-colors"
                             >
                               <Edit2 size={12} /> Edit
                             </button>
                           )}
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(m.id) }}
+                            onClick={() => handleDelete(m.id)}
                             className="flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-4 py-1.5 rounded-full hover:bg-gray-50 hover:text-red-600 hover:border-red-200 transition-colors"
                           >
                             <Trash2 size={12} /> Delete
@@ -338,7 +400,9 @@ export default function MeetingsPage() {
 
                         {/* Security */}
                         <div className="pt-3 border-t border-gray-100">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1.5">Security</p>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1.5">
+                            Security
+                          </p>
                           <p className="text-[13px] text-gray-700">
                             Passcode: <span className="font-mono font-medium">{m.passcode}</span>
                           </p>
