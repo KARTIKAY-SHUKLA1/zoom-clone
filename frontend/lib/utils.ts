@@ -53,12 +53,29 @@ export function getGreeting(): string {
   return 'Good evening'
 }
 
+/**
+ * Build a shareable join URL using window.location.origin so deployed
+ * links always point to the actual domain, never hardcoded localhost.
+ */
+export function getJoinUrl(meetingId: string): string {
+  const origin =
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_FRONTEND_URL ?? ''
+  return `${origin}/join?mid=${meetingId}`
+}
+
+/**
+ * Full invitation text for clipboard copy.
+ * Uses window.location.origin — works correctly on Vercel deployment.
+ */
 export function buildInvitationText(m: Meeting): string {
   const displayId = formatMeetingId(m.meeting_id)
+  const joinUrl = getJoinUrl(m.meeting_id)
   return (
     `${m.title} is inviting you to a scheduled Zoom meeting.\n\n` +
     `Meeting ID: ${displayId}\n` +
     `Passcode: ${m.passcode}\n` +
-    `Join link: ${m.invite_link}`
+    `Join link: ${joinUrl}`
   )
 }
