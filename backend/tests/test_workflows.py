@@ -128,6 +128,8 @@ class WorkflowTests(unittest.TestCase):
             f"{mid[:3]} {mid[3:7]} {mid[7:]}",
             m["invite_link"],
             f"https://assignment.example.com/join?mid={mid}&other=1",
+            f"My Meeting is inviting you to a scheduled Zoom meeting.\n\nMeeting ID: {mid[:3]} {mid[3:7]} {mid[7:]}\nPasscode: MikjaR\nJoin link: {m['invite_link']}",
+            f"My MeetingMeeting ID: {mid}Passcode: MikjaRJoin link: {m['invite_link']}",
         ]:
             self.assertEqual(
                 self.client.post(
@@ -141,6 +143,8 @@ class WorkflowTests(unittest.TestCase):
             "https://example.com/" + mid,
             m["invite_link"] + "junk",
             m["invite_link"] + "&mid=" + mid,
+            f"Meeting ID: {mid}\nJoin link: https://example.com/join?mid=12345678901",
+            f"Meeting ID: {mid}\nJoin link: https://example.com/join?mid=bad",
         ]:
             self.assertEqual(
                 self.client.post(

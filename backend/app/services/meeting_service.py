@@ -32,7 +32,7 @@ def format_meeting_id(meeting_id: str) -> str:
     return meeting_id
 
 
-def extract_meeting_id(raw: str) -> str:
+def _extract_id_or_url(raw: str) -> str:
     """
     Parse a bare digit meeting ID from user input.
 
@@ -54,3 +54,20 @@ def extract_meeting_id(raw: str) -> str:
         return ""
     mid = re.sub(r"[\s-]", "", raw)
     return mid if re.fullmatch(r"[0-9]{11}", mid) else ""
+
+
+def extract_meeting_id(raw: str) -> str:
+    """Accept an ID, invite URL, or copied invitation with matching ID/link.
+
+    A text input removes pasted line breaks, so labels must also work without
+    newlines. Reject conflicting IDs rather than joining an arbitrary meeting.
+    """
+    direct = _extract_id_or_url(raw)
+    if direct:
+        return direct
+    values = re.findall(r"Meeting\s+ID\s*:\s*([0-9][0-9 \t-]*)", raw, re.I)
+    values += re.findall(r"Join\s+link\s*:\s*(https?://[^\s<>]+)", raw, re.I)
+    if not values:
+        return ""
+    ids = [_extract_id_or_url(value) for value in values]
+    return ids[0] if all(ids) and len(set(ids)) == 1 else ""

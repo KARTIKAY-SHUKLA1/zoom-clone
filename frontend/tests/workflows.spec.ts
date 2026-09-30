@@ -116,6 +116,21 @@ test('join accepts a full invite link and validates before asking for a name', a
   await expect(page.getByText('Invite Link Guest (me)', { exact: true })).toBeVisible()
 })
 
+test('join accepts the complete copied invitation pasted into the single-line input', async ({ page, request }) => {
+  const m = await (await request.post(`${API}/api/meetings/instant`)).json()
+  created.push(m.id)
+  const mid = m.meeting_id
+  const invitation = `${m.title} is inviting you to a scheduled Zoom meeting.\n\nMeeting ID: ${mid.slice(0,3)} ${mid.slice(3,7)} ${mid.slice(7)}\nPasscode: ${m.passcode}\nJoin link: ${m.invite_link}`
+  await page.goto('/join')
+  await page.getByRole('textbox', {name:'Meeting ID or invite link'}).fill(invitation)
+  await page.getByRole('button', {name:'Join', exact:true}).click()
+  await page.getByRole('button', {name:'Join from your browser', exact:true}).click()
+  await page.getByRole('textbox', {name:'Your Name'}).fill('Full Invitation Guest')
+  await page.getByRole('button', {name:'Join Meeting', exact:true}).click()
+  await page.getByRole('button', {name:'Continue without microphone and camera', exact:true}).click()
+  await expect(page.getByText('Full Invitation Guest (me)', {exact:true})).toBeVisible()
+})
+
 test('joining can retry a temporary API failure without duplicate participants', async ({ page, request }) => {
   const m = await (await request.post(`${API}/api/meetings/instant`)).json()
   created.push(m.id)
