@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-import app.models  # noqa: F401 — imports User, Meeting, Participant so SQLAlchemy registers them
+import app.models  # noqa: F401 — registers User, Meeting, Participant with SQLAlchemy
 from app.config import settings
 from app.database import Base, engine
 from app.routers import meetings, participants, users
@@ -20,7 +20,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    # Reads from CORS_ORIGINS env var — comma-separated list of allowed origins
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
